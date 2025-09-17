@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>Move Drone</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 16px; background:#f0f0f0; }
+    fieldset { border:1px solid #ddd; border-radius:8px; padding:12px; background:#fff; }
+    #console { background:#000; color:#0f0; padding:10px; border-radius:6px; height:320px; overflow:auto; margin-top:12px; }
+    button { padding:8px 12px; font-size:16px; }
+    .camera { margin-top:16px; }
+  </style>
+</head>
+<body>
+  <h2>Chimney Selection</h2>
+
+  <fieldset id="chimneysBox">
+    <legend>굴뚝 선택</legend>
+    <div id="radios">로딩중...</div>
+  </fieldset>
+
+  <div style="margin-top:12px;">
+    <button id="runBtn" disabled>이동</button>
+  </div>
+
+  <div class="camera">
+    <h3>Camera Feeds</h3>
+    <iframe id="camera1"
+            src="https://droneview.ngrok.app/index.html"
+            width="100%" height="420"
+            frameborder="0" allowfullscreen>
+    </iframe>
+  </div>
+
+  <h3>Server Console Output</h3>
+  <div id="console"></div>
+
+<script>
+  const radiosDiv = document.getElementById('radios');
+  const runBtn = document.getElementById('runBtn');
+  const con = document.getElementById('console');
+
+  function log(msg) {
+    const d = document.createElement('div');
+    d.textContent = msg;
+    con.appendChild(d);
+    con.scrollTop = con.scrollHeight;
+  }
+
+  // WS로 콘솔 메시지 수신 (백엔드가 hub.broadcast({"type":"consoleMessage","data":...}) 호출)
+  const ws = new WebSocket(`ws://${location.host}/ws/telemetry`);
+  ws.onmessage = (e) => {
+    try {
+      const m = JSON.parse(e.data);
+      if (m.type === 'consoleMessage') log(m.data);
+    } catch (err) {}
+  };
+
+  // 굴뚝 목록 받아서 라디오 버튼 렌더링
+  async function loadChimneys() {
+    const r = await fetch('/moveDrone/chimneys');
+    const data = await r.json();
+    radiosDiv.innerHTML = '';
+    if (!data.chimneys || data.chimneys.length === 0) {
+      radiosDiv.textContent = '저장된 굴뚝이 없습니다.';
+      runBtn.disabled = true;
+      return;
+    }
+    data.chimneys.forEach((name, i) => {
+      const id = `chim_${i}`;
+      const wrap = document.createElement('div');
+      wrap.innerHTML = `
+        <input type="radio" id="${id}" name="chimney" value="${name}" ${i===0?'checked':''}>
+        <label for="${id}">${name}</label>
+      `;
+      radiosDiv.appendChild(wrap);
+    });
+    runBtn.disabled = false;
+  }
+
+  runBtn.onclick = async () => {
+    const checked = document.querySelector('input[name="chimney"]:checked');
+    if (!checked) return alert('굴뚝을 선택하세요');
+    const chimney = checked.value;
+    log(`[ui] move start chimney=${chimney}`);
+    runBtn.disabled = true;
+    try {
+      const r = await fetch('/moveDrone/move', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ chimney })
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || '실패');
+      log('[ui] move done');
+    } catch (e) {
+      log('[ui] ERROR: ' + e.message);
+      alert(e.message);
+    } finally {
+      runBtn.disabled = false;
+    }
+  };
+
+  loadChimneys();
+</script>
+</body>
+</html>
