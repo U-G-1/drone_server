@@ -1,7 +1,9 @@
+# app/services/location_service.py
 from typing import Optional
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.location import Location
+from datetime import datetime, timezone   # ← 추가
 
 async def _next_chim_num(session: AsyncSession, chim_name: str) -> int:
     res = await session.execute(
@@ -27,6 +29,7 @@ async def create_location(
         slope=slope,
         chim_name=chim_name,
         chim_num=chim_num,
+        ts=datetime.now(timezone.utc),   
     )
     session.add(row)
     await session.commit()
