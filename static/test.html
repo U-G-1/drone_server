@@ -23,15 +23,18 @@
   </div>
 
   <form id="cmdForm" class="row" onsubmit="return false;">
+    <!-- fieldset 안의 라디오 그룹 부분만 변경 -->
     <fieldset>
-      <legend>명령 선택</legend>
-      <label><input type="radio" name="action" value="arm" checked> Arm</label>
-      <label style="margin-left:16px;"><input type="radio" name="action" value="takeoff"> Takeoff</label>
-      <label style="margin-left:16px;">고도(m):
+    <legend>명령 선택</legend>
+    <label><input type="radio" name="action" value="arm" checked> Arm</label>
+    <label style="margin-left:16px;"><input type="radio" name="action" value="takeoff"> Takeoff</label>
+    <label style="margin-left:16px;"><input type="radio" name="action" value="land"> Land</label>
+    <label style="margin-left:16px;">고도(m):
         <input type="number" id="alt" step="0.1" value="5">
-      </label>
-      <button id="run">실행</button>
+    </label>
+    <button id="run">실행</button>
     </fieldset>
+
   </form>
 
   <div class="row">
