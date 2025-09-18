@@ -1,12 +1,12 @@
 import asyncio
-from typing import List, Optional
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
 from app.services.location_service import list_chimneys, coordinates_by_chimney
-from app.ws.hub import hub  # 기존 허브 재사용 (type 필드로 구분)
+from app.ws.hub import hub  # 콘솔/텔레메트리 브로드캐스트 허브
 
 router = APIRouter(prefix="/moveDrone", tags=["moveDrone"])
 
@@ -20,7 +20,7 @@ class ChimneysOut(BaseModel):
 
 @router.get("/chimneys", response_model=ChimneysOut)
 async def get_chimneys(session: AsyncSession = Depends(get_session)):
-    names = await list_chimneys(session)
+    names = await list_chimneys(session)  # 중복 없이 정렬된 chim_name 목록
     return ChimneysOut(chimneys=names)
 
 # 2) 이동 실행
@@ -36,11 +36,12 @@ async def move_drone(body: MoveIn, session: AsyncSession = Depends(get_session))
     if not chim_name:
         raise HTTPException(status_code=400, detail="chimney is required")
 
+    # 같은 chim_name의 좌표를 chim_num ASC로 반환 (서비스에서 정렬 보장)
     coords = await coordinates_by_chimney(session, chim_name)
     if not coords:
         raise HTTPException(status_code=404, detail="No points for this chimney")
 
-    # pyCode/move_drone.py 에 좌표를 x y z x y z ... 평탄화해서 전달
+    # x y z x y z ...
     args = []
     for (x, y, z) in coords:
         args.extend([str(x), str(y), str(z)])
@@ -59,10 +60,8 @@ async def move_drone(body: MoveIn, session: AsyncSession = Depends(get_session))
             if not line:
                 break
             msg = line.decode(errors="ignore").rstrip()
-            # 콘솔을 모든 클라이언트로 브로드캐스트
             await hub.broadcast({"type": "consoleMessage", "data": f"[{tag}] {msg}"})
 
-    # 표준출력/표준에러 동시에 읽어 브로드캐스트
     await asyncio.gather(_pump(proc.stdout, "stdout"), _pump(proc.stderr, "stderr"))
     rc = await proc.wait()
     await hub.broadcast({"type": "consoleMessage", "data": f"[move] exit code {rc}"})

@@ -10,6 +10,7 @@ from app.ws.endpoints import ws_router
 from app.routers import health, telemetry, telemetry_read
 from app.services.telemetry_stream import streamer
 from app.routers import test_control
+from app.routers import move_drone
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -33,6 +34,7 @@ app.include_router(ws_router)
 app.include_router(telemetry.router, prefix="/telemetry", tags=["telemetry"])
 app.include_router(telemetry_read.router, prefix="/telemetry", tags=["telemetry"])
 app.include_router(test_control.router)
+app.include_router(move_drone.router)
 
 # 홈
 @app.get("/", include_in_schema=False)

@@ -7,13 +7,21 @@
   <style>
     body { font-family: system-ui, sans-serif; padding: 16px; background:#f0f0f0; }
     fieldset { border:1px solid #ddd; border-radius:8px; padding:12px; background:#fff; }
-    #console { background:#000; color:#0f0; padding:10px; border-radius:6px; height:320px; overflow:auto; margin-top:12px; }
+    #console { background:#000; color:#0f0; padding:10px; border-radius:6px; height:240px; overflow:auto; margin-top:12px; }
     button { padding:8px 12px; font-size:16px; }
     .camera { margin-top:16px; }
+    .row { margin: 8px 0; }
+    #pos { font-weight: 600; }
   </style>
 </head>
 <body>
   <h2>Chimney Selection</h2>
+
+  <!-- 실시간 좌표 -->
+  <div class="row">
+    <div>실시간 좌표(1초 갱신):</div>
+    <div id="pos">x: -, y: -, z: -</div>
+  </div>
 
   <fieldset id="chimneysBox">
     <legend>굴뚝 선택</legend>
@@ -40,6 +48,7 @@
   const radiosDiv = document.getElementById('radios');
   const runBtn = document.getElementById('runBtn');
   const con = document.getElementById('console');
+  const posEl = document.getElementById('pos');
 
   function log(msg) {
     const d = document.createElement('div');
@@ -48,16 +57,25 @@
     con.scrollTop = con.scrollHeight;
   }
 
-  // WS로 콘솔 메시지 수신 (백엔드가 hub.broadcast({"type":"consoleMessage","data":...}) 호출)
-  const ws = new WebSocket(`ws://${location.host}/ws/telemetry`);
+  // --- WebSocket: 콘솔 + 실시간 좌표(x,y,z) 수신 ---
+  const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${wsProtocol}//${location.host}/ws/telemetry`);
   ws.onmessage = (e) => {
     try {
       const m = JSON.parse(e.data);
-      if (m.type === 'consoleMessage') log(m.data);
-    } catch (err) {}
+      if (m.type === 'consoleMessage') {
+        log(m.data);
+      } else if (m.type === 'telemetry' && m.data) {
+        const t = m.data;
+        posEl.textContent = `x: ${t.x}, y: ${t.y}, z: ${t.z}`;
+      }
+    } catch {}
+  };
+  ws.onclose = () => {
+    log('[ws] closed');
   };
 
-  // 굴뚝 목록 받아서 라디오 버튼 렌더링
+  // --- 굴뚝 목록 → 라디오 버튼으로 표시 ---
   async function loadChimneys() {
     const r = await fetch('/moveDrone/chimneys');
     const data = await r.json();
@@ -79,6 +97,7 @@
     runBtn.disabled = false;
   }
 
+  // --- 이동 실행 ---
   runBtn.onclick = async () => {
     const checked = document.querySelector('input[name="chimney"]:checked');
     if (!checked) return alert('굴뚝을 선택하세요');
