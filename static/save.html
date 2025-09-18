@@ -51,33 +51,41 @@
 
 
 <script>
-  // ... (chim_name localStorage/쿠키 부분 동일)
+  const chimInput  = document.getElementById('chim');
+  const saveBtn    = document.getElementById('saveBtn');
+  const saveMsg    = document.getElementById('saveMsg');
+  const posEl      = document.getElementById('pos');
 
-  const posEl = document.getElementById('pos');
-  const saveBtn = document.getElementById('saveBtn');
-  const saveMsg = document.getElementById('saveMsg');
+  // 굴뚝 이름 localStorage 유지
+  chimInput.value = localStorage.getItem('chimneyNumber') || '';
+  chimInput.addEventListener('input', () => localStorage.setItem('chimneyNumber', chimInput.value));
 
-  let latest = null;
-  let lastTs = 0;
+  // 쿠키 설정 (선택)
+  document.getElementById('setChim').onclick = async () => {
+    const chimneyNumber = chimInput.value.trim();
+    if (!chimneyNumber) { alert('굴뚝 이름을 입력하세요'); return; }
+    const r = await fetch('/saveLocation', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ chimneyNumber })
+    });
+    // 간단 피드백
+  };
 
+  let latest = null, lastTs = 0;
   function updateBtnState() {
-    const fresh = (Date.now() - lastTs) < 3000;
-    saveBtn.disabled = !fresh;
+    saveBtn.disabled = (Date.now() - lastTs) >= 3000;
   }
   setInterval(updateBtnState, 1000);
 
   const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
   const ws = new WebSocket(`${wsProtocol}//${location.host}/ws/telemetry`);
-
   ws.onmessage = (e) => {
     try {
-      const msg = JSON.parse(e.data);
-      if (msg.type === 'telemetry') {
-        latest = msg.data;
+      const m = JSON.parse(e.data);
+      if (m.type === 'telemetry') {
+        latest = m.data;
         lastTs = Date.now();
         posEl.textContent = `x: ${latest.x}, y: ${latest.y}, z: ${latest.z}, slope: ${latest.slope ?? '-'}`;
-      } else if (msg.type === 'consoleMessage') {
-        // 필요하면 화면에 로그 표시
       }
     } catch {}
   };
@@ -86,9 +94,23 @@
     saveBtn.disabled = true;
   };
 
-  // 저장 버튼: 최신 좌표 + chim_name을 POST (/telemetry 저장 API는 기존 그대로)
-  // ...
+  // 저장 버튼: 최신 좌표 + chim_name을 DB에 저장 (기존 /telemetry POST 그대로)
+  saveBtn.onclick = async () => {
+    if (!latest) return alert('아직 좌표가 없습니다');
+    const chim_name = chimInput.value.trim();
+    if (!chim_name) return alert('굴뚝 이름을 입력하세요');
+
+    const payload = { x: latest.x, y: latest.y, z: latest.z, slope: latest.slope ?? null, tag: chim_name };
+    const r = await fetch('/telemetry', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await r.json();
+    if (!r.ok) return alert(data.detail || '저장 실패');
+    saveMsg.textContent = `저장 완료: ${chim_name}`; setTimeout(()=> saveMsg.textContent='', 2000);
+  };
 </script>
+
 
 
 </body>
