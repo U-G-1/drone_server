@@ -90,20 +90,35 @@
   };
 
   // 저장: 최신 좌표 + chim_name을 DB에 INSERT
-  saveBtn.onclick = async () => {
-    if (!latest) return alert('아직 좌표가 없습니다');
-    const chim_name = chimInput.value.trim();
-    if (!chim_name) return alert('굴뚝 이름을 입력하세요');
+saveBtn.onclick = async () => {
+  if (!latest) return alert('아직 좌표가 없습니다');
+  const chim_name = chimInput.value.trim();
+  if (!chim_name) return alert('굴뚝 이름을 입력하세요');
 
-    const payload = { x: latest.x, y: latest.y, z: latest.z, slope: latest.slope ?? null, tag: chim_name };
+  // 값이 없으면 0으로 fallback
+  const payload = {
+    x: latest.x ?? 0,
+    y: latest.y ?? 0,
+    z: latest.z ?? 0,
+    slope: latest.slope ?? 0,
+    tag: chim_name
+  };
+
+  try {
     const r = await fetch('/telemetry', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
       body: JSON.stringify(payload)
     });
     const data = await r.json();
-    if (!r.ok) return alert(data.detail || '저장 실패');
+    if (!r.ok) throw new Error(data.detail || '저장 실패');
     saveMsg.textContent = `저장 완료: ${chim_name}`;
     setTimeout(()=> saveMsg.textContent='', 2000);
+  } catch (err) {
+    alert('저장 실패: ' + err.message);
+  }
+};
+
   };
 </script>
 </body>
