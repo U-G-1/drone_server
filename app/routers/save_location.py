@@ -36,7 +36,7 @@ async def set_chimney(body: SetChimneyIn, response: Response):
     response.set_cookie("chimneyNumber", body.chimneyNumber, httponly=True, max_age=86400, samesite="lax")
     return {"ok": True}
 
-@router.post("/measure", response_model=MeasureOut)
+@router.post("/measure_DISABLED", response_model=MeasureOut)
 async def measure():
     script = BASE_DIR / "pyCode" / "save_location.py"
     if not script.exists():

@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
+from fastapi import Request
 
 # main.py 상단 import
 from fastapi import Request
@@ -39,8 +41,9 @@ app.include_router(move_drone.router)
 app.include_router(telemetry_read.router)
 
 BASE_DIR = Path(__file__).resolve().parent
-app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
+app = FastAPI(title="Drone Control API", version="0.1.0")
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 @app.middleware("http")
 async def _trace_measure(request: Request, call_next):
@@ -50,6 +53,14 @@ async def _trace_measure(request: Request, call_next):
         print("UA     :", request.headers.get("user-agent"))
         print("Client :", request.client)
     return await call_next(request)
+
+
+@app.api_route("/saveLocation/measure", methods=["GET", "POST"])
+async def _kill_measure(request: Request):
+    print("### BLOCKED measure hit ###",
+          "Referer:", request.headers.get("referer"),
+          "UA:", request.headers.get("user-agent"))
+    return JSONResponse({"detail": "measure disabled"}, status_code=410)
 
 @app.get("/", include_in_schema=False)
 def home_file():
