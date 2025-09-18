@@ -4,6 +4,10 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from fastapi.responses import FileResponse
 
+# main.py 상단 import
+from fastapi import Request
+
+
 from app.core.config import settings
 from app.db.init_db import init_db
 from app.routers import telemetry, flight, health
@@ -35,6 +39,17 @@ app.include_router(move_drone.router)
 app.include_router(telemetry_read.router)
 
 BASE_DIR = Path(__file__).resolve().parent
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+
+@app.middleware("http")
+async def _trace_measure(request: Request, call_next):
+    if request.url.path == "/saveLocation/measure":
+        print("=== MEASURE CALLED ===")
+        print("Referer:", request.headers.get("referer"))
+        print("UA     :", request.headers.get("user-agent"))
+        print("Client :", request.client)
+    return await call_next(request)
 
 @app.get("/", include_in_schema=False)
 def home_file():
