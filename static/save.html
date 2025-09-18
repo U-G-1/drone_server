@@ -57,7 +57,7 @@
     if (!chimneyNumber) { alert('굴뚝 이름을 입력하세요'); return; }
     // 쿠키 안 써도 되지만, 필요하면 서버에 기록 남김
     const r = await fetch('/telemetry/current');
-    chimStatus.textContent = r.ok ? '굿! 실시간 수신 중' : '아직 수신 전';
+    chimStatus.textContent = r.ok ? '코스를 선택하였습니다' : '아직 수신 전';
   };
 
   // WS만으로 실시간 좌표 표시
