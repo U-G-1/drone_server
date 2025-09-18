@@ -55,11 +55,9 @@
   document.getElementById('setChim').onclick = async () => {
     const chimneyNumber = chimInput.value.trim();
     if (!chimneyNumber) { alert('굴뚝 이름을 입력하세요'); return; }
-    const r = await fetch('/saveLocation', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ chimneyNumber })
-    });
-    chimStatus.textContent = r.ok ? '쿠키 설정됨' : '쿠키 설정 실패';
+    // 쿠키 안 써도 되지만, 필요하면 서버에 기록 남김
+    const r = await fetch('/telemetry/current');
+    chimStatus.textContent = r.ok ? '굿! 실시간 수신 중' : '아직 수신 전';
   };
 
   // WS만으로 실시간 좌표 표시
@@ -80,7 +78,7 @@
       const m = JSON.parse(e.data);
       if (m.type === 'telemetry') {
         latest = m.data; lastTs = Date.now();
-        posEl.textContent = `x: ${latest.x}, y: ${latest.y}, z: ${latest.z}, slope: ${latest.slope ?? '-'}`;
+        posEl.textContent = `x: ${latest.x.toFixed(7)}, y: ${latest.y.toFixed(7)}, z: ${latest.z.toFixed(2)}, slope: ${m.data.slope ?? '-'}`;
       } else if (m.type === 'consoleMessage') {
         log(m.data);
       }

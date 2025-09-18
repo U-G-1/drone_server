@@ -1,25 +1,29 @@
+import asyncio
 from typing import Set
-from fastapi import WebSocket
+from starlette.websockets import WebSocket
 
-class TelemetryHub:
+class Hub:
     def __init__(self):
-        self.connections: Set[WebSocket] = set()
+        self._conns: Set[WebSocket] = set()
+        self._lock = asyncio.Lock()
 
     async def connect(self, ws: WebSocket):
         await ws.accept()
-        self.connections.add(ws)
+        async with self._lock:
+            self._conns.add(ws)
 
-    def disconnect(self, ws: WebSocket):
-        self.connections.discard(ws)
+    async def disconnect(self, ws: WebSocket):
+        async with self._lock:
+            self._conns.discard(ws)
 
-    async def broadcast(self, payload: dict):
-        stale = []
-        for ws in list(self.connections):
+    async def broadcast(self, message: dict):
+        dead = []
+        for ws in list(self._conns):
             try:
-                await ws.send_json(payload)
+                await ws.send_json(message)
             except Exception:
-                stale.append(ws)
-        for ws in stale:
-            self.disconnect(ws)
+                dead.append(ws)
+        for d in dead:
+            await self.disconnect(d)
 
-hub = TelemetryHub()
+hub = Hub()

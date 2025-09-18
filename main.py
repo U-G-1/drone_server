@@ -1,28 +1,23 @@
-from fastapi import FastAPI
+from pathlib import Path
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pathlib import Path
-from fastapi.responses import FileResponse
-from fastapi.responses import JSONResponse
-from fastapi import Request
-
-# main.py 상단 import
-from fastapi import Request
-
+from fastapi.responses import FileResponse, JSONResponse
 
 from app.core.config import settings
 from app.db.init_db import init_db
-from app.routers import telemetry, flight, health
 from app.ws.endpoints import ws_router
-from app.routers import save_location
-from app.routers import move_drone
+from app.routers import health, telemetry, telemetry_read
 from app.services.telemetry_stream import streamer
-from app.routers import telemetry_read
 
+BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="Drone Control API", version="0.1.0")
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# 정적 파일 (절대경로로 고정)
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -31,48 +26,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-app.include_router(health.router, prefix="")
+# 라우터
+app.include_router(health.router)
+app.include_router(ws_router)
 app.include_router(telemetry.router, prefix="/telemetry", tags=["telemetry"])
-app.include_router(flight.router, prefix="", tags=["flight"])
-app.include_router(ws_router, prefix="", tags=["ws"])
-app.include_router(save_location.router)
-app.include_router(move_drone.router)
-app.include_router(telemetry_read.router)
+app.include_router(telemetry_read.router, prefix="/telemetry", tags=["telemetry"])
 
-BASE_DIR = Path(__file__).resolve().parent
-
-app = FastAPI(title="Drone Control API", version="0.1.0")
-app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
-
-@app.middleware("http")
-async def _trace_measure(request: Request, call_next):
-    if request.url.path == "/saveLocation/measure":
-        print("=== MEASURE CALLED ===")
-        print("Referer:", request.headers.get("referer"))
-        print("UA     :", request.headers.get("user-agent"))
-        print("Client :", request.client)
-    return await call_next(request)
-
-
-@app.api_route("/saveLocation/measure", methods=["GET", "POST"])
-async def _kill_measure(request: Request):
-    print("### BLOCKED measure hit ###",
-          "Referer:", request.headers.get("referer"),
-          "UA:", request.headers.get("user-agent"))
-    return JSONResponse({"detail": "measure disabled"}, status_code=410)
-
+# 홈
 @app.get("/", include_in_schema=False)
 def home_file():
     return FileResponse(BASE_DIR / "static" / "index.html")
 
+# (안전장치) 과거 폴링 경로를 강제로 차단
+@app.api_route("/saveLocation/measure", methods=["GET", "POST"])
+async def _kill_measure(request: Request):
+    return JSONResponse({"detail": "measure disabled"}, status_code=410)
+
+# 수명주기
 @app.on_event("startup")
 async def on_startup():
     await init_db()
-    streamer.start()   # 실시간 좌표 스트리머 시작
+    streamer.start()     # MAVSDK(또는 FAKE) → WS로 계속 브로드캐스트
 
 @app.on_event("shutdown")
 async def on_shutdown():
     await streamer.stop()
-
-
