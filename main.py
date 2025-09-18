@@ -10,6 +10,8 @@ from app.routers import telemetry, flight, health
 from app.ws.endpoints import ws_router
 from app.routers import save_location
 from app.routers import move_drone
+from app.services.telemetry_stream import streamer
+from app.routers import telemetry_read
 
 
 app = FastAPI(title="Drone Control API", version="0.1.0")
@@ -30,6 +32,7 @@ app.include_router(flight.router, prefix="", tags=["flight"])
 app.include_router(ws_router, prefix="", tags=["ws"])
 app.include_router(save_location.router)
 app.include_router(move_drone.router)
+app.include_router(telemetry_read.router)
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -37,8 +40,13 @@ BASE_DIR = Path(__file__).resolve().parent
 def home_file():
     return FileResponse(BASE_DIR / "static" / "index.html")
 
-
 @app.on_event("startup")
 async def on_startup():
     await init_db()
+    streamer.start()   # 실시간 좌표 스트리머 시작
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await streamer.stop()
+
 

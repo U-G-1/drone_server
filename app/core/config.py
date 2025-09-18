@@ -5,5 +5,6 @@ class Settings(BaseModel):
     APP_ENV: str = os.getenv("APP_ENV", "dev")
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./app.db")
     CORS_ORIGINS: list[str] = ["*"]
+    MAVSDK_ADDRESS: str = os.getenv("MAVSDK_ADDRESS", "udp://:14540")  # PX4 SITL 기본
 
 settings = Settings()

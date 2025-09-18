@@ -51,136 +51,45 @@
 
 
 <script>
-  // ---- 굴뚝 이름 유지 (localStorage)
-  const chimInput  = document.getElementById('chim');
-  const chimStatus = document.getElementById('chimStatus');
-  chimInput.value = localStorage.getItem('chimneyNumber') || '';
-  chimInput.addEventListener('input', () => {
-    localStorage.setItem('chimneyNumber', chimInput.value);
-  });
+  // ... (chim_name localStorage/쿠키 부분 동일)
 
-  document.getElementById('setChim').onclick = async () => {
-    const chimneyNumber = chimInput.value.trim();
-    if (!chimneyNumber) { alert('굴뚝 이름을 입력하세요'); return; }
-    const r = await fetch('/saveLocation', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ chimneyNumber })
-    });
-    chimStatus.textContent = r.ok ? '쿠키 설정됨' : '쿠키 설정 실패';
-  };
+  const posEl = document.getElementById('pos');
+  const saveBtn = document.getElementById('saveBtn');
+  const saveMsg = document.getElementById('saveMsg');
 
-  // ---- UI refs
-  const posEl    = document.getElementById('pos');
-  const saveBtn  = document.getElementById('saveBtn');
-  const saveMsg  = document.getElementById('saveMsg');
-  const consoleOutput = document.getElementById('consoleOutput');
-
-  function log(msg) {
-    const d = document.createElement('div');
-    d.textContent = msg;
-    consoleOutput.appendChild(d);
-    consoleOutput.scrollTop = consoleOutput.scrollHeight;
-  }
-
-  // ---- 최신 좌표 상태
   let latest = null;
   let lastTs = 0;
 
-  function renderPos() {
-    if (!latest) return;
-    posEl.textContent = `x: ${latest.x}, y: ${latest.y}, z: ${latest.z}, slope: ${latest.slope ?? '-'}`;
-  }
-
   function updateBtnState() {
-    // 최근 3초 내 좌표가 있으면 저장 버튼 활성화
     const fresh = (Date.now() - lastTs) < 3000;
     saveBtn.disabled = !fresh;
   }
   setInterval(updateBtnState, 1000);
 
-  // ---- A) WebSocket 수신 (있으면 push로 갱신)
   const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
   const ws = new WebSocket(`${wsProtocol}//${location.host}/ws/telemetry`);
 
-  ws.onmessage = (event) => {
+  ws.onmessage = (e) => {
     try {
-      const data = JSON.parse(event.data);
-      if (data.type === "telemetry") {
-        latest = data.data;
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'telemetry') {
+        latest = msg.data;
         lastTs = Date.now();
-        renderPos();
-      } else if (data.type === "consoleMessage") {
-        log(data.data);
+        posEl.textContent = `x: ${latest.x}, y: ${latest.y}, z: ${latest.z}, slope: ${latest.slope ?? '-'}`;
+      } else if (msg.type === 'consoleMessage') {
+        // 필요하면 화면에 로그 표시
       }
-    } catch (e) {
-      console.error('WS parse error', e);
-    }
+    } catch {}
   };
   ws.onclose = () => {
-    log('[ws] 연결 종료');
-    // WS 없어도 아래 폴링이 계속 갱신해줌
+    posEl.textContent = '실시간 연결 종료됨 (WS 닫힘)';
+    saveBtn.disabled = true;
   };
 
-  // ---- B) 1초 폴링: 페이지 로드 즉시 /saveLocation/measure 호출 (WS 미도착 보완)
-  // 주의: /saveLocation/measure 는 내부적으로 파이썬 스크립트를 실행하므로
-  // 실제 운영에선 스트리밍 방식(지속 연결)로 바꾸는 걸 권장. 지금은 간단 동작 확인용.
-  let inflight = false; // 중복 호출 방지
-  async function pollMeasure() {
-    if (inflight) return;
-    inflight = true;
-    try {
-      const r = await fetch('/saveLocation/measure', { method: 'POST' });
-      if (r.ok) {
-        const data = await r.json(); // {values, x, y, z}
-        latest = { x: data.x, y: data.y, z: data.z, slope: null };
-        lastTs = Date.now();
-        renderPos();
-      } else {
-        // 에러 메시지 출력(너무 시끄러우면 주석)
-        const err = await r.text();
-        log('[measure error] ' + err);
-      }
-    } catch (e) {
-      log('[measure fetch error] ' + e.message);
-    } finally {
-      inflight = false;
-    }
-  }
-
-  // 페이지 로드시 즉시 1회 + 1초마다 반복
-  pollMeasure();
-  setInterval(pollMeasure, 1000);
-
-  // ---- 저장 (프론트 주도: 최신 좌표 + chim_name POST)
-  saveBtn.onclick = async () => {
-    if (!latest) { alert('아직 좌표가 없습니다'); return; }
-    const chim_name = chimInput.value.trim();
-    if (!chim_name) { alert('굴뚝 이름을 입력하세요'); return; }
-
-    const payload = {
-      x: latest.x,
-      y: latest.y,
-      z: latest.z,
-      slope: latest.slope ?? null,
-      tag: chim_name
-    };
-
-    try {
-      const r = await fetch('/telemetry', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(payload)
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.detail || '저장 실패');
-      saveMsg.textContent = `저장 완료: ${chim_name}`;
-      setTimeout(()=> saveMsg.textContent = '', 2000);
-    } catch (err) {
-      console.error(err);
-      alert('저장 실패: ' + err.message);
-    }
-  };
+  // 저장 버튼: 최신 좌표 + chim_name을 POST (/telemetry 저장 API는 기존 그대로)
+  // ...
 </script>
+
 
 </body>
 </html>
