@@ -9,6 +9,7 @@ from app.db.init_db import init_db
 from app.ws.endpoints import ws_router
 from app.routers import health, telemetry, telemetry_read
 from app.services.telemetry_stream import streamer
+from app.routers import test_control
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -31,6 +32,7 @@ app.include_router(health.router)
 app.include_router(ws_router)
 app.include_router(telemetry.router, prefix="/telemetry", tags=["telemetry"])
 app.include_router(telemetry_read.router, prefix="/telemetry", tags=["telemetry"])
+app.include_router(test_control.router)
 
 # 홈
 @app.get("/", include_in_schema=False)
