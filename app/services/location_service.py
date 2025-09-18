@@ -4,6 +4,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.location import Location
 from datetime import datetime, timezone   # ← 추가
+from typing import List
 
 async def _next_chim_num(session: AsyncSession, chim_name: str) -> int:
     res = await session.execute(
@@ -37,7 +38,7 @@ async def create_location(
     return row
 
 
-async def list_chimneys(session: AsyncSession) -> List[str]:
+async def list_chimneys(session: AsyncSession) -> Optional[str]:
     """
     저장된 chim_name 목록을 중복 없이 정렬해서 반환
     """
@@ -45,7 +46,7 @@ async def list_chimneys(session: AsyncSession) -> List[str]:
     rows = (await session.execute(q)).scalars().all()
     return rows
 
-async def coordinates_by_chimney(session: AsyncSession, chim_name: str) -> List[Tuple[float, float, float]]:
+async def coordinates_by_chimney(session: AsyncSession, chim_name: str) -> Optional[Tuple[float, float, float]]:
     """
     해당 chim_name의 코스를 chim_num 오름차순으로 (x,y,z) 목록으로 반환
     """
