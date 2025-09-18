@@ -9,6 +9,12 @@
     .row { margin: 8px 0; }
     input, button { padding: 8px; font-size: 16px; }
     #pos { font-weight: 600; }
+    .video-container { margin-top:16px; }
+    #consoleOutput {
+      background:#000; color:#0f0; padding:10px;
+      border-radius:6px; height:320px; overflow:auto; margin-top:12px;
+    }
+
   </style>
 </head>
 <body>
@@ -29,6 +35,20 @@
     <button id="saveBtn" disabled>저장</button>
     <small id="saveMsg"></small>
   </div>
+  <!-- Camera -->
+<div class="video-container">
+  <h3>Camera Feeds</h3>
+  <iframe id="camera1"
+          src="https://droneview.ngrok.app/index.html"
+          width="100%" height="420"
+          frameborder="0" allowfullscreen>
+  </iframe>
+</div>
+
+<!-- Console -->
+<h3>Server Console Output</h3>
+<div id="consoleOutput"></div>
+
 
 <script>
   // ---- 굴뚝 이름 유지 (localStorage)
@@ -65,18 +85,18 @@
     saveBtn.disabled = !fresh;
   }
 
-  const ws = new WebSocket(`ws://${location.host}/ws/telemetry`);
-  ws.onmessage = (e) => {
-    try {
-      const msg = JSON.parse(e.data);
-      if (msg.type === 'telemetry' && msg.data) {
-        latest = msg.data; // {x,y,z,slope, ...}
-        lastTs = Date.now();
-        posEl.textContent = `x: ${latest.x}, y: ${latest.y}, z: ${latest.z}, slope: ${latest.slope ?? '-'}`;
-        updateBtnState();
-      }
-    } catch (err) {
-      console.error('WS parse error', err);
+  const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";  
+  const ws = new WebSocket(`${wsProtocol}//${location.host}/ws/telemetry`);
+
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === "telemetry") {
+      // 좌표 표시
+      latest = data.data;
+      lastTs = Date.now();
+      pos.textContent = `x: ${latest.x}, y: ${latest.y}, z: ${latest.z}`;
+    } else if (data.type === "consoleMessage") {
+      log(data.data);  // Server Console Output에 찍기
     }
   };
   ws.onclose = () => {
@@ -84,6 +104,14 @@
     saveBtn.disabled = true;
   };
   setInterval(updateBtnState, 1000);
+
+  const consoleOutput = document.getElementById('consoleOutput');
+  function log(msg) {
+    const d = document.createElement('div');
+    d.textContent = msg;
+    consoleOutput.appendChild(d);
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+  }
 
   // ---- 저장 (프론트 주도 방식: 최신 좌표 + chim_name을 바로 POST)
   saveBtn.onclick = async () => {

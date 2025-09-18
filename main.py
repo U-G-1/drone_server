@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from pathlib import Path
+from fastapi.responses import FileResponse
 
 from app.core.config import settings
 from app.db.init_db import init_db
@@ -29,7 +31,14 @@ app.include_router(ws_router, prefix="", tags=["ws"])
 app.include_router(save_location.router)
 app.include_router(move_drone.router)
 
+BASE_DIR = Path(__file__).resolve().parent
+
+@app.get("/", include_in_schema=False)
+def home_file():
+    return FileResponse(BASE_DIR / "static" / "index.html")
+
 
 @app.on_event("startup")
 async def on_startup():
     await init_db()
+
