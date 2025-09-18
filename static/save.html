@@ -95,7 +95,7 @@
     const chim_name = chimInput.value.trim();
     if (!chim_name) return alert('굴뚝 이름을 입력하세요');
 
-    const payload = { x: latest.x, y: latest.y, z: latest.z, slope: latest.slope ?? null, tag: chim_name };
+    const payload = { x: latest.x, y: latest.y, z: latest.z, slope: latest.slope ?? 0, tag: chim_name };
     const r = await fetch('/telemetry', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(payload)
