@@ -10,11 +10,7 @@
     input, button { padding: 8px; font-size: 16px; }
     #pos { font-weight: 600; }
     .video-container { margin-top:16px; }
-    #consoleOutput {
-      background:#000; color:#0f0; padding:10px;
-      border-radius:6px; height:320px; overflow:auto; margin-top:12px;
-    }
-
+    #consoleOutput { background:#000; color:#0f0; padding:10px; border-radius:6px; height:320px; overflow:auto; margin-top:12px; }
   </style>
 </head>
 <body>
@@ -27,7 +23,7 @@
   </div>
 
   <div class="row">
-    <div>실시간 좌표(1초 갱신):</div>
+    <div>실시간 좌표:</div>
     <div id="pos">x: -, y: -, z: -, slope: -</div>
   </div>
 
@@ -35,48 +31,48 @@
     <button id="saveBtn" disabled>저장</button>
     <small id="saveMsg"></small>
   </div>
-  <!-- Camera -->
-<div class="video-container">
-  <h3>Camera Feeds</h3>
-  <iframe id="camera1"
-          src="https://droneview.ngrok.app/index.html"
-          width="100%" height="420"
-          frameborder="0" allowfullscreen>
-  </iframe>
-</div>
 
-<!-- Console -->
-<h3>Server Console Output</h3>
-<div id="consoleOutput"></div>
+  <div class="video-container">
+    <h3>Camera Feeds</h3>
+    <iframe id="camera1" src="https://droneview.ngrok.app/index.html" width="100%" height="420" frameborder="0" allowfullscreen></iframe>
+  </div>
 
+  <h3>Server Console Output</h3>
+  <div id="consoleOutput"></div>
 
 <script>
   const chimInput  = document.getElementById('chim');
+  const chimStatus = document.getElementById('chimStatus');
   const saveBtn    = document.getElementById('saveBtn');
   const saveMsg    = document.getElementById('saveMsg');
   const posEl      = document.getElementById('pos');
+  const consoleOutput = document.getElementById('consoleOutput');
 
   // 굴뚝 이름 localStorage 유지
   chimInput.value = localStorage.getItem('chimneyNumber') || '';
   chimInput.addEventListener('input', () => localStorage.setItem('chimneyNumber', chimInput.value));
 
-  // (선택) 쿠키 설정 버튼
   document.getElementById('setChim').onclick = async () => {
     const chimneyNumber = chimInput.value.trim();
     if (!chimneyNumber) { alert('굴뚝 이름을 입력하세요'); return; }
-    await fetch('/saveLocation', {
+    const r = await fetch('/saveLocation', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ chimneyNumber })
     });
+    chimStatus.textContent = r.ok ? '쿠키 설정됨' : '쿠키 설정 실패';
   };
 
+  // WS만으로 실시간 좌표 표시
   let latest = null, lastTs = 0;
-  function updateBtnState() {
-    saveBtn.disabled = (Date.now() - lastTs) >= 3000;
-  }
-  setInterval(updateBtnState, 1000);
+  setInterval(() => { saveBtn.disabled = (Date.now() - lastTs) >= 3000; }, 1000);
 
-  // WS로 실시간 좌표 수신
+  function log(msg) {
+    const d = document.createElement('div');
+    d.textContent = msg;
+    consoleOutput.appendChild(d);
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+  }
+
   const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
   const ws = new WebSocket(`${wsProtocol}//${location.host}/ws/telemetry`);
   ws.onmessage = (e) => {
@@ -85,6 +81,8 @@
       if (m.type === 'telemetry') {
         latest = m.data; lastTs = Date.now();
         posEl.textContent = `x: ${latest.x}, y: ${latest.y}, z: ${latest.z}, slope: ${latest.slope ?? '-'}`;
+      } else if (m.type === 'consoleMessage') {
+        log(m.data);
       }
     } catch {}
   };
@@ -93,7 +91,7 @@
     saveBtn.disabled = true;
   };
 
-  // 저장 버튼: 최신 좌표 + chim_name DB 저장
+  // 저장: 최신 좌표 + chim_name을 DB에 INSERT
   saveBtn.onclick = async () => {
     if (!latest) return alert('아직 좌표가 없습니다');
     const chim_name = chimInput.value.trim();
@@ -110,9 +108,5 @@
     setTimeout(()=> saveMsg.textContent='', 2000);
   };
 </script>
-
-
-
-
 </body>
 </html>
