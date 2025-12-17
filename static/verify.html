@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Telemetry Verification (raw vs normalized)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background:#0b0f14; color:#e8eef6; }
+    header { padding: 16px 20px; border-bottom: 1px solid #1d2a3a; display:flex; align-items:center; justify-content:space-between; }
+    h1 { font-size: 16px; margin: 0; }
+    .pill { font-size: 12px; padding: 6px 10px; border: 1px solid #2a3b52; border-radius: 999px; color:#b9c7da; }
+    .wrap { display:grid; grid-template-columns: 1.1fr .9fr; gap: 12px; padding: 12px; }
+    .card { background:#0f1621; border:1px solid #1d2a3a; border-radius: 14px; padding: 12px; }
+    .card h2 { font-size: 13px; margin: 0 0 8px; color:#cfe3ff; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .kv { display:flex; justify-content:space-between; gap:8px; padding: 8px 10px; border:1px solid #1d2a3a; border-radius: 12px; background:#0b121c; }
+    .k { color:#9fb2c9; font-size: 12px; }
+    .v { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; }
+    #raw { height: 520px; overflow:auto; padding: 10px; border:1px solid #1d2a3a; border-radius: 12px; background:#0b121c; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.5; }
+    .muted { color:#93a7bf; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Telemetry Verification — raw(혼재) vs normalized(정리)</h1>
+    <div class="pill" id="wsStatus">WS: connecting...</div>
+  </header>
+
+  <div class="wrap">
+    <div class="card">
+      <h2>서버 수신 로그 (raw stream 그대로)</h2>
+      <div class="muted">position/battery가 서로 다른 주기·순서로 들어오면 여기 로그가 섞여 보입니다.</div>
+      <div style="height:10px"></div>
+      <div id="raw"></div>
+    </div>
+
+    <div class="card">
+      <h2>서버 정규화 결과 (1Hz 스케줄링 스냅샷)</h2>
+      <div class="muted">서버가 최신값 캐시를 기반으로 1초마다 합성한 “동시 표시” 결과입니다.</div>
+      <div style="height:10px"></div>
+
+      <div class="grid">
+        <div class="kv"><div class="k">Position (x,y,z)</div><div class="v" id="pos">-</div></div>
+        <div class="kv"><div class="k">Battery (remain)</div><div class="v" id="batt">-</div></div>
+        <div class="kv"><div class="k">pos age (s)</div><div class="v" id="posAge">-</div></div>
+        <div class="kv"><div class="k">batt age (s)</div><div class="v" id="battAge">-</div></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const rawEl = document.getElementById('raw');
+    const wsStatus = document.getElementById('wsStatus');
+    const posEl = document.getElementById('pos');
+    const battEl = document.getElementById('batt');
+    const posAgeEl = document.getElementById('posAge');
+    const battAgeEl = document.getElementById('battAge');
+
+    const wsProto = (location.protocol === 'https:') ? 'wss' : 'ws';
+    const wsUrl = `${wsProto}://${location.host}/ws`;
+
+    function fmtTime(ts) {
+      const d = new Date(ts * 1000);
+      return d.toLocaleTimeString();
+    }
+
+    function appendRaw(line) {
+      const atBottom = (rawEl.scrollTop + rawEl.clientHeight) >= (rawEl.scrollHeight - 10);
+      rawEl.textContent += line + "\n";
+      const lines = rawEl.textContent.split('\n');
+      if (lines.length > 220) rawEl.textContent = lines.slice(lines.length - 220).join('\n');
+      if (atBottom) rawEl.scrollTop = rawEl.scrollHeight;
+    }
+
+    const ws = new WebSocket(wsUrl);
+    ws.onopen = () => { wsStatus.textContent = 'WS: connected'; };
+    ws.onclose = () => { wsStatus.textContent = 'WS: closed'; };
+    ws.onerror = () => { wsStatus.textContent = 'WS: error'; };
+
+    ws.onmessage = (ev) => {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch { return; }
+
+      if (msg.type === 'raw_telemetry') {
+        const d = msg.data || {};
+        if (d.kind === 'position') {
+          appendRaw(`[${fmtTime(d.ts)}][RAW][POSITION] x=${d.x} y=${d.y} z=${d.z}`);
+        } else if (d.kind === 'battery') {
+          const r = (d.remaining != null) ? (d.remaining * 100).toFixed(1) + '%' : '-';
+          appendRaw(`[${fmtTime(d.ts)}][RAW][BATTERY] remaining=${r} V=${d.voltage_v ?? '-'} A=${d.current_a ?? '-'}`);
+        }
+      }
+
+      if (msg.type === 'normalized_telemetry') {
+        const d = msg.data || {};
+        const p = d.position;
+        const b = d.battery;
+        if (p) posEl.textContent = `${Number(p.x).toFixed(6)}, ${Number(p.y).toFixed(6)}, ${Number(p.z).toFixed(2)}`;
+        if (b) battEl.textContent = (b.remaining != null) ? `${(Number(b.remaining) * 100).toFixed(1)}%` : '-';
+
+        const now = Date.now() / 1000;
+        posAgeEl.textContent = (d.pos_ts ? (now - d.pos_ts).toFixed(2) : '-');
+        battAgeEl.textContent = (d.batt_ts ? (now - d.batt_ts).toFixed(2) : '-');
+      }
+    };
+  </script>
+</body>
+</html>
